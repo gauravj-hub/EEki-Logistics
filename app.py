@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import streamlit_gsheets.connection as gsheets_connection
+from streamlit_gsheets import GSheetsConnection as gsheets_connection
 
 st.set_page_config(page_title="Eeki Farms", layout="wide", page_icon="🌱")
 st.title("🌱 Eeki Farms Customer Data Entry")
