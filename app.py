@@ -1,117 +1,60 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime
+import requests
+import io
 
-# Page config
-st.set_page_config(
-    page_title="Eeki Logistics Dashboard",
-    page_icon="🛒",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Eeki Logistics", layout="wide")
 
 @st.cache_data(ttl=600)
-def load_eeki_logistics_data():
-    """Load logistics data from Google Sheet"""
+def load_public_sheet(sheet_id, worksheet=0):
+    """Load public Google Sheet as CSV"""
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Sheet{worksheet}"
     try:
-        SHEET_ID = st.secrets["eeki_sheet_id"]
-        
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        
-        # Load service account from secrets
-        creds_dict = st.secrets["gcp_service_account"]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        
-        # Open sheet and get data
-        sheet = client.open_by_key(SHEET_ID).sheet1
-        data = sheet.get_all_records()
-        
-        if data:
-            return pd.DataFrame(data)
-        else:
-            return pd.DataFrame()
-            
+        response = requests.get(url)
+        response.raise_for_status()
+        df = pd.read_csv(io.StringIO(response.text))
+        return df
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"Error: {e}")
+        st.info("Make sure your Google Sheet is PUBLIC and use correct Sheet ID")
         return pd.DataFrame()
 
 def main():
     st.title("🛒 Eeki Logistics Dashboard")
-    st.markdown("---")
     
-    # Load data
-    @st.cache_data(ttl=600)
-    def get_data():
-        return load_eeki_logistics_data()
+    # Get sheet ID from sidebar
+    st.sidebar.header("📊 Sheet Settings")
+    sheet_id = st.sidebar.text_input(
+        "Google Sheet ID", 
+        value="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+    )
     
-    df = get_data()
+    df = load_public_sheet(sheet_id)
     
     if df.empty:
-        st.warning("No data found. Please check your Google Sheet ID and service account permissions.")
-        st.info("Expected columns: Order_ID, Customer, Status, Date, Quantity, Destination")
+        st.warning("❌ No data loaded. Steps:")
+        st.markdown("""
+        1. Copy Sheet ID from your Google Sheet URL
+        2. Make your Sheet **PUBLIC** (Anyone with link)
+        3. Paste ID above and refresh
+        """)
         return
     
-    # Sidebar filters
-    st.sidebar.header("🔍 Filters")
-    
-    status_options = df['Status'].unique() if 'Status' in df.columns else []
-    selected_status = st.sidebar.multiselect(
-        "Status", 
-        options=status_options, 
-        default=status_options
-    )
-    
-    if 'Date' in df.columns:
-        date_range = st.sidebar.date_input("Date Range", [])
-        if len(date_range) == 2:
-            df['Date'] = pd.to_datetime(df['Date'])
-            df = df[(df['Date'] >= pd.to_datetime(date_range[0])) & 
-                   (df['Date'] <= pd.to_datetime(date_range[1]))]
-    
-    # Apply status filter
-    if selected_status:
-        df = df[df['Status'].isin(selected_status)]
-    
     # Metrics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_orders = len(df)
-        st.metric("Total Orders", total_orders)
-    
-    with col2:
-        if 'Quantity' in df.columns:
-            total_qty = df['Quantity'].sum()
-            st.metric("Total Quantity", total_qty)
-    
-    with col3:
-        pending = len(df[df['Status'] == 'Pending']) if 'Status' in df.columns else 0
-        st.metric("Pending Orders", pending)
-    
-    with col4:
-        completed = len(df[df['Status'] == 'Completed']) if 'Status' in df.columns else 0
-        st.metric("Completed", completed)
+    col1, col2, col3 = st.columns(3)
+    with col1: st.metric("Rows", len(df))
+    with col2: st.metric("Columns", len(df.columns))
+    with col3: st.metric("Last Update", f"{pd.Timestamp.now():%H:%M}")
     
     st.markdown("---")
     
-    # Data table
-    st.subheader("📋 Logistics Data")
+    # Data
+    st.subheader("📋 Data")
     st.dataframe(df, use_container_width=True)
     
-    # Download button
+    # Download
     csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download CSV",
-        data=csv,
-        file_name=f"eeki_logistics_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv"
-    )
+    st.download_button("📥 Download CSV", csv, f"eeki_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.csv")
 
 if __name__ == "__main__":
     main()
