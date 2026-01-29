@@ -1,4 +1,6 @@
 streamlit>=1.38.0
-streamlit-gsheets==0.0.5  # Latest stable as of late 2025
-validators==0.21.0  # Avoids import errors
+st-gsheets-connection==0.0.5
 gspread==6.1.0
+google-auth==2.35.0
+validators==0.21.0
+pandas
