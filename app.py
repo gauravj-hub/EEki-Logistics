@@ -1,7 +1,10 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection as gsheets_connection  # Fixed
 import pandas as pd
-from datetime import date
-from streamlit_gsheets import GSheetsConnection as gsheets_connection
+
+# Your connection code
+conn = st.connection("gsheets", type=gsheets_connection)
+
 
 st.set_page_config(page_title="Eeki Farms", layout="wide", page_icon="🌱")
 st.title("🌱 Eeki Farms Customer Data Entry")
