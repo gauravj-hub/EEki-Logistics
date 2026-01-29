@@ -3,29 +3,45 @@ import pandas as pd
 from datetime import date
 
 st.set_page_config(page_title="Eeki Farms", layout="wide", page_icon="🌱")
-st.title("🌱 Eeki Farms Data Entry - NO ERRORS!")
+st.title("🌱 Eeki Farms Data Entry")
 
-# Use BUILT-IN Streamlit connection (no external packages needed)
+# Use correct connection type
 @st.cache_resource
 def get_connection():
-    return st.connection("gsheets")
+    return st.connection("gsheets", type=st.gsheets.GSheetsConnection)
 
-conn = get_connection()
+try:
+    conn = get_connection()
+    st.success("✅ Connected!")
+except:
+    st.error("❌ Connection failed - check secrets.toml")
+    st.stop()
 
-# Connection test
+# Test buttons
 col1, col2 = st.columns(2)
 with col1:
-    if st.button("🧪 Test Connection", type="secondary"):
+    if st.button("🧪 Test Read"):
         try:
-            df = conn.read()
-            st.success("✅ CONNECTION WORKS!")
-            st.dataframe(df.head())
+            df = conn.read(worksheet="Sheet1")
+            st.success("✅ READ OK!")
+            st.dataframe(df.tail(3))
         except Exception as e:
-            st.error(f"❌ Connection failed: {e}")
+            st.error(f"Read error: {e}")
 
-# SIMPLIFIED FORM
-st.subheader("📝 Enter Farm Data")
-with st.form("farm_form"):
+with col2:
+    if st.button("🧪 Test Write"):
+        try:
+            test_row = pd.DataFrame({"Test": ["Write Test"], "Date": [str(date.today())]})
+            existing = conn.read(worksheet="Sheet1")
+            new_data = pd.concat([existing, test_row])
+            conn.update(worksheet="Sheet1", data=new_data)
+            st.success("✅ WRITE OK!")
+        except Exception as e:
+            st.error(f"Write error: {e}")
+
+# MAIN FORM
+st.subheader("📝 Farm Data Entry")
+with st.form("farm_data"):
     col1, col2 = st.columns(2)
     with col1:
         farm1 = st.text_input("Farm 1 *")
@@ -33,37 +49,26 @@ with st.form("farm_form"):
         vendor = st.text_input("Vendor *")
     with col2:
         crop1 = st.text_input("Crop 1 *")
-        qty1 = st.number_input("Quantity 1 (kg) *", min_value=0.01)
-        entry_date = st.date_input("Date", value=date.today())
+        qty1 = st.number_input("Quantity (kg) *", min_value=0.01)
+        date_entry = st.date_input("Date")
     
-    submitted = st.form_submit_button("🚀 Save to Google Sheets")
-
-if submitted:
-    if all([farm1, loc1, vendor, crop1]):
+    submit = st.form_submit_button("🚀 Save", type="primary")
+    
+    if submit and all([farm1, loc1, vendor, crop1]):
         try:
-            # Read existing data + append new row
-            existing_df = conn.read()
             new_row = pd.DataFrame({
-                "Farm": [farm1], "Location": [loc1], "Crop": [crop1], 
-                "Quantity": [qty1], "Vendor": [vendor], "Date": [str(entry_date)]
+                "Farm": [farm1], "Location1": [loc1], "Crop1": [crop1],
+                "Quantity1": [qty1], "Vendor": [vendor], "Date": [str(date_entry)]
             })
-            updated_df = pd.concat([existing_df, new_row], ignore_index=True)
-            
-            # Write back to sheet
-            conn.update(data=updated_df)
-            st.success("✅ DATA SAVED TO GOOGLE SHEETS!")
+            existing = conn.read(worksheet="Sheet1")
+            updated = pd.concat([existing, new_row], ignore_index=True)
+            conn.update(worksheet="Sheet1", data=updated)
+            st.success("✅ SAVED!")
             st.balloons()
             st.rerun()
         except Exception as e:
-            st.error(f"❌ Save error: {e}")
-    else:
-        st.error("Fill all required fields (*)")
+            st.error(f"Save failed: {e}")
 
-# Show data
-if st.checkbox("📊 View All Data"):
-    try:
-        df = conn.read()
-        st.dataframe(df, use_container_width=True)
-        st.caption(f"Total records: {len(df)}")
-    except:
-        st.info("No data or connection issue")
+if st.checkbox("📊 Show Data"):
+    df = conn.read(worksheet="Sheet1")
+    st.dataframe(df)
